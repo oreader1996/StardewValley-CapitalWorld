@@ -47,7 +47,7 @@ namespace FarmHelper.UI
         private int _listStartY;
 
         public HireMenu(IModHelper helper, ModConfig config, WorkerService workerService)
-            : base(Game1.viewport.Width / 2 - 400, Game1.viewport.Height / 2 - 300, 800, 600, true)
+            : base(Game1.viewport.Width / 2 - 400, Game1.viewport.Height / 2 - 320, 800, 640, true)
         {
             _helper = helper;
             _config = config;
@@ -99,23 +99,23 @@ namespace FarmHelper.UI
             int taskTitleY = yPositionOnScreen + 80;
             
             // Tasks (Two Rows)
-            int taskY = yPositionOnScreen + 120;
+            int taskY = yPositionOnScreen + 130;
             int startX = xPositionOnScreen + 50;
-            int spacing = 150; // 减小间距以容纳更多任务
+            int spacing = 140; // 减小间距以容纳更多任务
 
-            // First Row
-            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Weeds], WorkType.Weeds, startX, taskY));
-            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Stone], WorkType.Stone, startX + spacing, taskY));
-            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Wood], WorkType.Wood, startX + spacing * 2, taskY));
-            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Watering], WorkType.Watering, startX + spacing * 3, taskY));
-            
+            // First Row - "全部"放到第一个位置
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.All], WorkType.All, startX, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Weeds], WorkType.Weeds, startX + spacing, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Stone], WorkType.Stone, startX + spacing * 2, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Wood], WorkType.Wood, startX + spacing * 3, taskY));
+
             // Second Row
             int taskY2 = taskY + 50;
-            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Collecting], WorkType.Collecting, startX, taskY2));
-            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.All], WorkType.All, startX + spacing, taskY2));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Watering], WorkType.Watering, startX, taskY2));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Collecting], WorkType.Collecting, startX + spacing, taskY2));
 
             // Scroll UI
-            _listStartY = yPositionOnScreen + 240;
+            _listStartY = yPositionOnScreen + 250;
             int listHeight = ITEMS_PER_PAGE * ITEM_HEIGHT + (ITEMS_PER_PAGE * ROW_PADDING);
             
             _upArrow = new ClickableTextureComponent(
@@ -282,7 +282,7 @@ namespace FarmHelper.UI
                 bool isHired = _workerService.IsHired(npc.Name);
 
                 // 计算按钮位置（只有一个按钮位置）
-                int buttonX = xPositionOnScreen + width - 64 - BUTTON_WIDTH - 10;
+                int buttonX = xPositionOnScreen + width - 64 - BUTTON_WIDTH - 20;
 
                 // Hire Button
                 if (!isHired)
@@ -441,12 +441,12 @@ namespace FarmHelper.UI
                 bool canHire = cost > 0 && canAfford && !isHired && _selectedTasks != WorkType.None;
 
                 // Row Background - 修复边框宽度，确保铺满（减去按钮和滚动条宽度）
-                int rowWidth = width - 100 - 64; // 减去左右边距和滚动条宽度
-                IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15), 
-                    xPositionOnScreen + 50, rowY, rowWidth, ITEM_HEIGHT, Color.White, 4f, false);
+                int rowWidth = width - 120 - 64; // 减去左右边距和滚动条宽度
+                IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15),
+                    xPositionOnScreen + 60, rowY, rowWidth, ITEM_HEIGHT, Color.White, 4f, false);
 
                 // Portrait (头像) - 第一列
-                int portraitX = xPositionOnScreen + 60;
+                int portraitX = xPositionOnScreen + 70;
                 int portraitY = rowY + 8;
                 if (npc.Portrait != null)
                 {
@@ -460,12 +460,12 @@ namespace FarmHelper.UI
                 }
 
                 // Name - 第二列（头像后面）
-                int nameX = portraitX + PORTRAIT_SIZE + 15;
+                int nameX = portraitX + PORTRAIT_SIZE + 10;
                 Color nameColor = isHired ? Color.Green : Game1.textColor;
                 b.DrawString(Game1.dialogueFont, npc.displayName, new Vector2(nameX, rowY + 20), nameColor);
 
                 // Hearts - 第三列
-                int heartsX = nameX + 200;
+                int heartsX = nameX + 180;
                 int hearts = Game1.player.getFriendshipHeartLevelForNPC(npc.Name);
                 if (hearts > 0) 
                 {
@@ -475,7 +475,7 @@ namespace FarmHelper.UI
                 }
 
                 // Cost/Stamina Text - 第四列
-                int costX = heartsX + 100;
+                int costX = heartsX + 80;
                 if (isHired)
                 {
                     // 显示体力值
@@ -499,7 +499,7 @@ namespace FarmHelper.UI
                 }
 
                 // Buttons - 第五列（最右边，只有一个按钮）
-                int buttonX = xPositionOnScreen + width - 64 - BUTTON_WIDTH - 10;
+                int buttonX = xPositionOnScreen + width - 64 - BUTTON_WIDTH - 20;
 
                 // Hire Button（未雇佣时显示）
                 if (!isHired)

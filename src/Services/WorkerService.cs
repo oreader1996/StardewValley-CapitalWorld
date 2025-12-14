@@ -521,7 +521,7 @@ namespace FarmHelper.Services
                 // 收集物品到玩家背包
                 if (Game1.player.addItemToInventoryBool(obj.getOne()))
                 {
-                    if (_config.EnableSoundEffects) Game1.playSound("pickUp");
+                    if (_config.EnableSoundEffects) Game1.playSound("coin");
                     farm.Objects.Remove(tile);
                     return true;
                 }
