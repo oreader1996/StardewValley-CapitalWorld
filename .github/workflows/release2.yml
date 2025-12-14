@@ -11,11 +11,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 👇 这里的 v3 必须改成 v4
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 👇 这里的 v3 必须改成 v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -24,8 +22,9 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
+      # 这里的 /p:EnableModDeploy=false 是双重保险
       - name: Build project
-        run: dotnet build --configuration Release /p:CI=true
+        run: dotnet build --configuration Release /p:EnableModDeploy=false
 
       - name: Prepare release folder
         shell: pwsh
@@ -38,7 +37,7 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
-      # 👇👇👇 这里的 v3 必须改成 v4，这就是报错的原因！ 👇👇👇
+      # ✅ 必须是 v4 版本，否则会报错
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
