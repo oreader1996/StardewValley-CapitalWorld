@@ -1,24 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-	  <!-- 1. 只有当本地路径真实存在时，才设置 GamePath (用于本地开发) -->
-	  <GamePath Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley\')">D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath>
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 
-	  <!-- 2. 如果 GamePath 为空（说明在 GitHub Actions 上），则禁用部署和调试功能 -->
-	  <!-- Pathoschild.Stardew.ModBuildConfig 4.0+ 会自动使用内置的 DLL 进行编译，不需要游戏路径 -->
-	  <EnableModDeploy Condition="'$(GamePath)' == ''">false</EnableModDeploy>
-	  <EnableGameDebugging Condition="'$(GamePath)' == ''">false</EnableGameDebugging>
-  </PropertyGroup>
+		<!-- ⬇️ 修正点：删除了 Exists 单引号前的反斜杠 -->
+		<GamePath Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath>
 
-  <ItemGroup>
-    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
-  </ItemGroup>
+		<!-- ⬇️ 保持不变 -->
+		<EnableModDeploy Condition="'$(GamePath)' == ''">false</EnableModDeploy>
+		<EnableGameDebugging Condition="'$(GamePath)' == ''">false</EnableGameDebugging>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Include=".github\workflows\release.yml" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include=".github\workflows\release.yml" />
+	</ItemGroup>
 
 </Project>

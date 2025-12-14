@@ -24,22 +24,23 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # 4️⃣ 构建项目 (显式禁用 Mod 部署)
-      # 注意：这里的 run 必须和上面的 name 保持对齐（通常是前面有8个空格）
+      # 4️⃣ 构建项目 (显式禁用 Mod 部署，防止寻找游戏路径报错)
       - name: Build project
         run: dotnet build --configuration Release /p:EnableModDeploy=false /p:EnableGameDebugging=false
 
-      # 5️⃣ 收集输出文件
+      # 5️⃣ 收集输出文件 (使用 PowerShell 语法，更稳定)
       - name: Prepare release folder
         run: |
-          if (Test-Path release) { Remove-Item -Recurse -Force release }
-          New-Item -ItemType Directory -Path release
-          copy /Y bin\Release\net6.0\CapitalWorld.dll release\
-          copy /Y manifest.json release\
+          # 创建 release 文件夹，如果存在则覆盖
+          New-Item -ItemType Directory -Force -Path release
+          
+          # 复制 DLL 和 manifest.json
+          Copy-Item -Path "bin\Release\net6.0\CapitalWorld.dll" -Destination "release\" -Force
+          Copy-Item -Path "manifest.json" -Destination "release\" -Force
 
       # 6️⃣ 打包成 ZIP
       - name: Create release zip
-        run: powershell Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
+        run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
       # 7️⃣ 上传到 GitHub Release
       - name: Upload release
