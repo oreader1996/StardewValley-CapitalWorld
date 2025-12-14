@@ -25,12 +25,19 @@ namespace FarmHelper.Services
         private readonly ModConfig _config;
 
         // 使用 PerScreen 确保分屏模式下状态隔离
-        private readonly PerScreen<NPC?> _workerNpc = new();
-        private readonly PerScreen<Vector2?> _currentTargetTile = new();
-        private readonly PerScreen<bool> _isHiredToday = new();
-        private readonly PerScreen<WorkType> _currentWorkTasks = new();
+        // 支持多个工人：使用字典存储每个NPC名称对应的工人实例和任务
+        private readonly PerScreen<Dictionary<string, WorkerInfo>> _workers = new(() => new Dictionary<string, WorkerInfo>());
+        private readonly PerScreen<Dictionary<string, Vector2?>> _workerTargets = new(() => new Dictionary<string, Vector2?>());
 
-        public bool IsHired => _isHiredToday.Value;
+        public bool IsHired(string npcName) => _workers.Value.ContainsKey(npcName);
+        public bool HasAnyWorker => _workers.Value.Count > 0;
+        
+        // 内部类：存储工人信息
+        private class WorkerInfo
+        {
+            public NPC Npc { get; set; }
+            public WorkType Tasks { get; set; }
+        }
 
         public WorkerService(IModHelper helper, IMonitor monitor, ModConfig config)
         {
@@ -47,17 +54,28 @@ namespace FarmHelper.Services
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
-            _isHiredToday.Value = false;
-            _workerNpc.Value = null;
-            _currentTargetTile.Value = null;
-            _currentWorkTasks.Value = WorkType.None;
+            // 清除所有工人
+            foreach (var worker in _workers.Value.Values)
+            {
+                if (worker.Npc != null && Game1.getFarm().characters.Contains(worker.Npc))
+                {
+                    Game1.getFarm().characters.Remove(worker.Npc);
+                }
+            }
+            _workers.Value.Clear();
+            _workerTargets.Value.Clear();
         }
 
         private void OnTimeChanged(object? sender, TimeChangedEventArgs e)
         {
-            if (_isHiredToday.Value && Game1.timeOfDay >= 1800)
+            if (Game1.timeOfDay >= 1800 && _workers.Value.Count > 0)
             {
-                DismissWorker(_helper.Translation.Get("message.finish_work"));
+                // 解雇所有工人
+                var workerNames = _workers.Value.Keys.ToList();
+                foreach (var name in workerNames)
+                {
+                    DismissWorker(name, _helper.Translation.Get("message.finish_work"));
+                }
             }
         }
 
@@ -69,32 +87,38 @@ namespace FarmHelper.Services
             // F9 打开雇佣界面
             if (e.Button == SButton.F9)
             {
-                if (_isHiredToday.Value)
-                {
-                    Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.worker_busy"), 2));
-                }
-                else
-                {
-                    Game1.activeClickableMenu = new HireMenu(_helper, _config, this);
-                }
+                Game1.activeClickableMenu = new HireMenu(_helper, _config, this);
             }
         }
 
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
-            if (!_isHiredToday.Value || _workerNpc.Value == null || !Context.IsWorldReady) return;
+            if (_workers.Value.Count == 0 || !Context.IsWorldReady) return;
 
             // 每秒执行一次逻辑 (60 ticks)
             if (e.IsMultipleOf(60))
             {
                 try
                 {
-                    DoWorkerLogic();
+                    // 为每个工人执行逻辑
+                    var workerNames = _workers.Value.Keys.ToList();
+                    foreach (var name in workerNames)
+                    {
+                        if (_workers.Value.ContainsKey(name))
+                        {
+                            DoWorkerLogic(name);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
                     _monitor.LogOnce($"Error in worker logic: {ex}", LogLevel.Error);
-                    DismissWorker("Worker encountered an error and left.");
+                    // 解雇出错的工人
+                    var workerNames = _workers.Value.Keys.ToList();
+                    foreach (var name in workerNames)
+                    {
+                        DismissWorker(name, "Worker encountered an error and left.");
+                    }
                 }
             }
         }
@@ -104,6 +128,13 @@ namespace FarmHelper.Services
         /// </summary>
         public void HireWorker(NPC templateNpc, WorkType tasks, int totalCost)
         {
+            // 检查是否已经雇佣
+            if (IsHired(templateNpc.Name))
+            {
+                Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.worker_busy"), 2));
+                return;
+            }
+
             if (Game1.player.Money < totalCost)
             {
                 Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.not_enough_money", new { cost = totalCost }), 3));
@@ -112,16 +143,21 @@ namespace FarmHelper.Services
 
             // 扣费
             Game1.player.Money -= totalCost;
-            _isHiredToday.Value = true;
-            _currentWorkTasks.Value = tasks;
 
-            SpawnWorker(templateNpc);
+            SpawnWorker(templateNpc, tasks);
             
-            Game1.exitActiveMenu();
             Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.hired", new { name = templateNpc.displayName, cost = totalCost }), 1));
         }
 
-        private void SpawnWorker(NPC templateNpc)
+        /// <summary>
+        /// 解雇指定工人
+        /// </summary>
+        public void DismissWorker(string npcName)
+        {
+            DismissWorker(npcName, _helper.Translation.Get("message.dismissed", new { name = npcName }));
+        }
+
+        private void SpawnWorker(NPC templateNpc, WorkType tasks)
         {
             Vector2 spawnPos = Game1.player.Position + new Vector2(64f, 0f);
             Farm farm = Game1.getFarm();
@@ -141,64 +177,77 @@ namespace FarmHelper.Services
                 currentLocation = farm
             };
 
-            _workerNpc.Value = npc;
+            // 存储工人信息
+            _workers.Value[templateNpc.Name] = new WorkerInfo
+            {
+                Npc = npc,
+                Tasks = tasks
+            };
+            _workerTargets.Value[templateNpc.Name] = null;
+            
             farm.addCharacter(npc);
             
             Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.start_work", new { name = npc.displayName }), 2));
-            _monitor.Log($"Worker {npc.Name} spawned on farm with tasks: {_currentWorkTasks.Value}", LogLevel.Debug);
+            _monitor.Log($"Worker {npc.Name} spawned on farm with tasks: {tasks}", LogLevel.Debug);
         }
 
-        private void DismissWorker(string message)
+        private void DismissWorker(string npcName, string message)
         {
-            if (_workerNpc.Value != null)
+            if (_workers.Value.TryGetValue(npcName, out var workerInfo))
             {
-                Game1.getFarm().characters.Remove(_workerNpc.Value);
-                _workerNpc.Value = null;
+                if (workerInfo.Npc != null && Game1.getFarm().characters.Contains(workerInfo.Npc))
+                {
+                    Game1.getFarm().characters.Remove(workerInfo.Npc);
+                }
+                _workers.Value.Remove(npcName);
+                _workerTargets.Value.Remove(npcName);
+                
+                if (!string.IsNullOrEmpty(message))
+                {
+                    Game1.addHUDMessage(new HUDMessage(message, 2));
+                }
             }
-            _isHiredToday.Value = false;
-            _currentTargetTile.Value = null;
-            Game1.addHUDMessage(new HUDMessage(message, 2));
         }
 
-        private void DoWorkerLogic()
+        private void DoWorkerLogic(string npcName)
         {
-            if (_workerNpc.Value == null) return;
+            if (!_workers.Value.TryGetValue(npcName, out var workerInfo) || workerInfo.Npc == null) return;
             Farm farm = Game1.getFarm();
 
-            if (_currentTargetTile.Value == null)
+            if (!_workerTargets.Value.TryGetValue(npcName, out var targetTile) || targetTile == null)
             {
-                _currentTargetTile.Value = FindTargetFromPlayer(farm);
+                targetTile = FindTargetFromPlayer(farm, workerInfo.Tasks);
+                _workerTargets.Value[npcName] = targetTile;
 
-                if (_currentTargetTile.Value == null)
+                if (targetTile == null)
                 {
-                    if (Game1.ticks % 300 == 0)
+                    if (Game1.ticks % 300 == 0 && _workers.Value.Count == 1)
                         Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.no_work"), 2));
                     return;
                 }
             }
 
-            Vector2 target = _currentTargetTile.Value.Value;
-            Vector2 current = _workerNpc.Value.Tile;
+            Vector2 target = targetTile.Value;
+            Vector2 current = workerInfo.Npc.Tile;
 
             // 距离检查
             if (Vector2.Distance(current, target) <= 1.5f)
             {
-                bool isDone = PerformOneHit(farm, target);
+                bool isDone = PerformOneHit(farm, target, workerInfo.Tasks, workerInfo.Npc);
 
                 if (isDone)
                 {
-                    _currentTargetTile.Value = null;
+                    _workerTargets.Value[npcName] = null;
                 }
             }
             else
             {
-                MoveWorkerTowards(current, target);
+                MoveWorkerTowards(workerInfo.Npc, current, target);
             }
         }
 
-        private Vector2? FindTargetFromPlayer(Farm farm)
+        private Vector2? FindTargetFromPlayer(Farm farm, WorkType tasks)
         {
-            WorkType tasks = _currentWorkTasks.Value;
             var candidates = new List<Vector2>();
 
             // 1. Objects (Weeds, Stones, Twigs)
@@ -276,31 +325,31 @@ namespace FarmHelper.Services
             return false;
         }
 
-        private void MoveWorkerTowards(Vector2 current, Vector2 target)
+        private void MoveWorkerTowards(NPC npc, Vector2 current, Vector2 target)
         {
-            if (_workerNpc.Value == null) return;
+            if (npc == null) return;
 
             Vector2 direction = target - current;
             if (direction != Vector2.Zero) direction.Normalize();
 
             if (Math.Abs(direction.X) > Math.Abs(direction.Y))
-                _workerNpc.Value.faceDirection(direction.X > 0 ? 1 : 3);
+                npc.faceDirection(direction.X > 0 ? 1 : 3);
             else
-                _workerNpc.Value.faceDirection(direction.Y > 0 ? 2 : 0);
+                npc.faceDirection(direction.Y > 0 ? 2 : 0);
 
-            _workerNpc.Value.setTilePosition(new Point((int)target.X, (int)target.Y));
+            npc.setTilePosition(new Point((int)target.X, (int)target.Y));
 
             var animFrames = new List<FarmerSprite.AnimationFrame>
             {
                 new FarmerSprite.AnimationFrame(0, 100),
                 new FarmerSprite.AnimationFrame(1, 100)
             };
-            _workerNpc.Value.Sprite.setCurrentAnimation(animFrames);
+            npc.Sprite.setCurrentAnimation(animFrames);
         }
 
-        private bool PerformOneHit(Farm farm, Vector2 tile)
+        private bool PerformOneHit(Farm farm, Vector2 tile, WorkType tasks, NPC npc)
         {
-            if (_workerNpc.Value == null) return true;
+            if (npc == null) return true;
 
             // 动画
             var animFrames = new List<FarmerSprite.AnimationFrame>
@@ -310,19 +359,19 @@ namespace FarmHelper.Services
             };
             
             // 如果是浇水，换动画? 暂时通用
-            if (_currentWorkTasks.Value.HasFlag(WorkType.Watering) && farm.terrainFeatures.ContainsKey(tile) && farm.terrainFeatures[tile] is HoeDirt)
+            if (tasks.HasFlag(WorkType.Watering) && farm.terrainFeatures.ContainsKey(tile) && farm.terrainFeatures[tile] is HoeDirt)
             {
                  // Watering animation frame usually
                  // For simplified logic, keep standard or simple
             }
             
-            _workerNpc.Value.Sprite.setCurrentAnimation(animFrames);
+            npc.Sprite.setCurrentAnimation(animFrames);
 
             // 1. Terrain Features (Trees, Crops)
             if (farm.terrainFeatures.TryGetValue(tile, out TerrainFeature tf))
             {
                 // Watering
-                if (tf is HoeDirt dirt && _currentWorkTasks.Value.HasFlag(WorkType.Watering))
+                if (tf is HoeDirt dirt && tasks.HasFlag(WorkType.Watering))
                 {
                     if (dirt.state.Value == 0) // if dry
                     {
@@ -336,7 +385,7 @@ namespace FarmHelper.Services
                 }
 
                 // Trees
-                if (tf is Tree tree && _currentWorkTasks.Value.HasFlag(WorkType.Wood))
+                if (tf is Tree tree && tasks.HasFlag(WorkType.Wood))
                 {
                     return ProcessTree(farm, tile, tree);
                 }
@@ -345,13 +394,13 @@ namespace FarmHelper.Services
             // 2. Objects
             if (farm.Objects.TryGetValue(tile, out StardewValley.Object obj))
             {
-                return ProcessObject(farm, tile, obj);
+                return ProcessObject(farm, tile, obj, tasks);
             }
 
             return true;
         }
 
-        private bool ProcessObject(Farm farm, Vector2 tile, StardewValley.Object obj)
+        private bool ProcessObject(Farm farm, Vector2 tile, StardewValley.Object obj, WorkType tasks)
         {
              Tool tool = (obj.Name != null && obj.Name.Contains("Stone")) ? (Tool)new Pickaxe() : (Tool)new Axe();
              tool.UpgradeLevel = 4;

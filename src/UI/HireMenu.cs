@@ -23,6 +23,7 @@ namespace FarmHelper.UI
         // Data
         private List<NPC> _availableNpcs = new();
         private WorkType _selectedTasks = WorkType.None;
+        private Dictionary<WorkType, string> _taskLabels = new();
 
         // UI Components
         private List<ClickableComponent> _taskCheckboxes = new();
@@ -40,6 +41,9 @@ namespace FarmHelper.UI
 
         // Layout Constants
         private const int ROW_PADDING = 10;
+        private const int PORTRAIT_SIZE = 64;
+        private const int BUTTON_WIDTH = 100;
+        private const int BUTTON_HEIGHT = 50;
         private int _listStartY;
 
         public HireMenu(IModHelper helper, ModConfig config, WorkerService workerService)
@@ -48,6 +52,12 @@ namespace FarmHelper.UI
             _helper = helper;
             _config = config;
             _workerService = workerService;
+            
+            // 初始化任务标签
+            _taskLabels[WorkType.Weeds] = _helper.Translation.Get("task.weeds");
+            _taskLabels[WorkType.Stone] = _helper.Translation.Get("task.stone");
+            _taskLabels[WorkType.Wood] = _helper.Translation.Get("task.wood");
+            _taskLabels[WorkType.Watering] = _helper.Translation.Get("task.watering");
             
             this.LoadNpcs();
             this.InitializeComponents();
@@ -75,10 +85,10 @@ namespace FarmHelper.UI
             int startX = xPositionOnScreen + 50;
             int spacing = 180;
 
-            _taskCheckboxes.Add(CreateCheckbox(_helper.Translation.Get("task.weeds"), WorkType.Weeds, startX, taskY));
-            _taskCheckboxes.Add(CreateCheckbox(_helper.Translation.Get("task.stone"), WorkType.Stone, startX + spacing, taskY));
-            _taskCheckboxes.Add(CreateCheckbox(_helper.Translation.Get("task.wood"), WorkType.Wood, startX + spacing * 2, taskY));
-            _taskCheckboxes.Add(CreateCheckbox(_helper.Translation.Get("task.watering"), WorkType.Watering, startX + spacing * 3, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Weeds], WorkType.Weeds, startX, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Stone], WorkType.Stone, startX + spacing, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Wood], WorkType.Wood, startX + spacing * 2, taskY));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Watering], WorkType.Watering, startX + spacing * 3, taskY));
 
             // Scroll UI
             _listStartY = yPositionOnScreen + 180;
@@ -109,7 +119,7 @@ namespace FarmHelper.UI
             return new ClickableComponent(new Rectangle(x, y, 160, 48), label)
             {
                 myID = (int)type,
-                name = type.ToString()
+                name = label  // 存储翻译后的标签
             };
         }
 
@@ -163,22 +173,26 @@ namespace FarmHelper.UI
             if (_downArrow != null && _downArrow.containsPoint(x, y)) Scroll(1);
             if (_scrollBarRunner.Contains(x, y)) _scrolling = true;
 
-            // Worker List Clicks (Hire Button)
+            // Worker List Clicks (Hire/Dismiss Buttons)
             for (int i = 0; i < ITEMS_PER_PAGE; i++)
             {
                 int index = _currentItemIndex + i;
                 if (index >= _availableNpcs.Count) break;
 
-                // Calculate button bounds for this row
                 int rowY = _listStartY + (i * ITEM_HEIGHT) + (i * ROW_PADDING);
-                // Assume button is at far right of the row
-                Rectangle buttonBounds = new Rectangle(xPositionOnScreen + width - 180, rowY + 10, 120, 60);
+                NPC npc = _availableNpcs[index];
+                bool isHired = _workerService.IsHired(npc.Name);
 
-                if (buttonBounds.Contains(x, y))
+                // 计算按钮位置
+                int buttonStartX = xPositionOnScreen + width - 64 - BUTTON_WIDTH * 2 - 20; // 两个按钮，右边留空间给滚动条
+                int hireButtonX = buttonStartX;
+                int dismissButtonX = buttonStartX + BUTTON_WIDTH + 10;
+
+                // Hire Button
+                Rectangle hireBtnRect = new Rectangle(hireButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                if (hireBtnRect.Contains(x, y) && !isHired)
                 {
-                    NPC npc = _availableNpcs[index];
                     int cost = CalculateCostForNpc(npc);
-
                     if (cost > 0 && _selectedTasks != WorkType.None)
                     {
                         _workerService.HireWorker(npc, _selectedTasks, cost);
@@ -188,6 +202,15 @@ namespace FarmHelper.UI
                     {
                         Game1.playSound("cancel");
                     }
+                    return;
+                }
+
+                // Dismiss Button
+                Rectangle dismissBtnRect = new Rectangle(dismissButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                if (dismissBtnRect.Contains(x, y) && isHired)
+                {
+                    _workerService.DismissWorker(npc.Name);
+                    Game1.playSound("smallSelect");
                     return;
                 }
             }
@@ -261,7 +284,7 @@ namespace FarmHelper.UI
                 new Vector2(xPositionOnScreen + width / 2 - Game1.dialogueFont.MeasureString(title).X / 2, yPositionOnScreen + 30), 
                 Game1.textColor);
 
-            // Tasks
+            // Tasks - 使用翻译后的标签
             foreach (var checkbox in _taskCheckboxes)
             {
                 WorkType type = (WorkType)checkbox.myID;
@@ -272,7 +295,7 @@ namespace FarmHelper.UI
                     isChecked ? OptionsCheckbox.sourceRectChecked : OptionsCheckbox.sourceRectUnchecked, 
                     Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.4f);
 
-                // Draw Text
+                // Draw Text - 使用存储的翻译标签
                 b.DrawString(Game1.smallFont, checkbox.name, new Vector2(checkbox.bounds.X + 50, checkbox.bounds.Y + 8), Game1.textColor);
             }
             
@@ -292,44 +315,86 @@ namespace FarmHelper.UI
                 
                 NPC npc = _availableNpcs[index];
                 int rowY = _listStartY + (i * ITEM_HEIGHT) + (i * ROW_PADDING);
+                bool isHired = _workerService.IsHired(npc.Name);
                 int cost = CalculateCostForNpc(npc);
                 bool canAfford = Game1.player.Money >= cost;
-                bool canHire = cost > 0 && canAfford;
+                bool canHire = cost > 0 && canAfford && !isHired && _selectedTasks != WorkType.None;
 
                 // Row Background
                 IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15), 
                     xPositionOnScreen + 50, rowY, width - 150, ITEM_HEIGHT, Color.White, 4f, false);
 
-                // Name
-                b.DrawString(Game1.dialogueFont, npc.displayName, new Vector2(xPositionOnScreen + 70, rowY + 20), Game1.textColor);
+                // Portrait (头像) - 第一列
+                int portraitX = xPositionOnScreen + 60;
+                int portraitY = rowY + 8;
+                if (npc.Portrait != null)
+                {
+                    b.Draw(npc.Portrait, new Rectangle(portraitX, portraitY, PORTRAIT_SIZE, PORTRAIT_SIZE), 
+                        new Rectangle(0, 0, 64, 64), Color.White);
+                }
+                else
+                {
+                    // 如果没有头像，绘制一个占位符
+                    b.Draw(Game1.staminaRect, new Rectangle(portraitX, portraitY, PORTRAIT_SIZE, PORTRAIT_SIZE), Color.Gray);
+                }
 
-                // Hearts
+                // Name - 第二列（头像后面）
+                int nameX = portraitX + PORTRAIT_SIZE + 15;
+                Color nameColor = isHired ? Color.Green : Game1.textColor;
+                b.DrawString(Game1.dialogueFont, npc.displayName, new Vector2(nameX, rowY + 20), nameColor);
+
+                // Hearts - 第三列
+                int heartsX = nameX + 200;
                 int hearts = Game1.player.getFriendshipHeartLevelForNPC(npc.Name);
                 if (hearts > 0) 
                 {
                      // Draw a heart icon
-                     b.Draw(Game1.mouseCursors, new Vector2(xPositionOnScreen + 300, rowY + 25), new Rectangle(211, 428, 7, 6), Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.8f);
-                     b.DrawString(Game1.smallFont, $"{hearts}", new Vector2(xPositionOnScreen + 340, rowY + 25), Color.Red);
+                     b.Draw(Game1.mouseCursors, new Vector2(heartsX, rowY + 25), new Rectangle(211, 428, 7, 6), Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.8f);
+                     b.DrawString(Game1.smallFont, $"{hearts}", new Vector2(heartsX + 30, rowY + 25), Color.Red);
                 }
 
-                // Cost Text
-                string costText = $"{cost}g";
-                b.DrawString(Game1.smallFont, costText, new Vector2(xPositionOnScreen + 450, rowY + 25), canAfford ? Color.DarkGoldenrod : Color.Red);
+                // Cost Text - 第四列
+                int costX = heartsX + 100;
+                string costText = isHired ? _helper.Translation.Get("ui.dismiss") : $"{cost}g";
+                Color costColor = isHired ? Color.Gray : (canAfford ? Color.DarkGoldenrod : Color.Red);
+                b.DrawString(Game1.smallFont, costText, new Vector2(costX, rowY + 25), costColor);
+
+                // Buttons - 第五列（最右边）
+                int buttonStartX = xPositionOnScreen + width - 64 - BUTTON_WIDTH * 2 - 20;
+                int hireButtonX = buttonStartX;
+                int dismissButtonX = buttonStartX + BUTTON_WIDTH + 10;
 
                 // Hire Button
-                Rectangle btnRect = new Rectangle(xPositionOnScreen + width - 180, rowY + 10, 120, 60);
-                
-                // Draw Button Box
-                IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(448, 262, 18, 16), 
-                    btnRect.X, btnRect.Y, btnRect.Width, btnRect.Height, 
-                    canHire ? Color.White : Color.Gray, 4f, false);
+                if (!isHired)
+                {
+                    Rectangle hireBtnRect = new Rectangle(hireButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                    IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(448, 262, 18, 16), 
+                        hireBtnRect.X, hireBtnRect.Y, hireBtnRect.Width, hireBtnRect.Height, 
+                        canHire ? Color.White : Color.Gray, 4f, false);
+                    
+                    string hireLabel = _helper.Translation.Get("ui.hire");
+                    Vector2 hireLabelSize = Game1.smallFont.MeasureString(hireLabel);
+                    Utility.drawTextWithShadow(b, hireLabel, Game1.smallFont, 
+                        new Vector2(hireBtnRect.X + (hireBtnRect.Width - hireLabelSize.X) / 2, 
+                            hireBtnRect.Y + (hireBtnRect.Height - hireLabelSize.Y) / 2), 
+                        canHire ? Game1.textColor : Color.DimGray);
+                }
 
-                // Draw "Hire" Text
-                string btnLabel = _helper.Translation.Get("ui.hire", new { cost = "" }).ToString().Replace("(-g)", "").Trim(); // Just "Hire" or similar
-                Vector2 labelSize = Game1.smallFont.MeasureString(btnLabel);
-                Utility.drawTextWithShadow(b, btnLabel, Game1.smallFont, 
-                    new Vector2(btnRect.X + (btnRect.Width - labelSize.X) / 2, btnRect.Y + (btnRect.Height - labelSize.Y) / 2), 
-                    canHire ? Game1.textColor : Color.DimGray);
+                // Dismiss Button
+                if (isHired)
+                {
+                    Rectangle dismissBtnRect = new Rectangle(dismissButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                    IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(448, 262, 18, 16), 
+                        dismissBtnRect.X, dismissBtnRect.Y, dismissBtnRect.Width, dismissBtnRect.Height, 
+                        Color.White, 4f, false);
+                    
+                    string dismissLabel = _helper.Translation.Get("ui.dismiss");
+                    Vector2 dismissLabelSize = Game1.smallFont.MeasureString(dismissLabel);
+                    Utility.drawTextWithShadow(b, dismissLabel, Game1.smallFont, 
+                        new Vector2(dismissBtnRect.X + (dismissBtnRect.Width - dismissLabelSize.X) / 2, 
+                            dismissBtnRect.Y + (dismissBtnRect.Height - dismissLabelSize.Y) / 2), 
+                        Game1.textColor);
+                }
             }
 
             // Close Button
