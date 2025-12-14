@@ -1,43 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFramework>net6.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-		<!-- ⬇️ 只要是 CI 环境，就强制禁用部署，防止任何残留逻辑干扰 -->
-		<EnableModDeploy Condition="'$(CI)' == 'true'">false</EnableModDeploy>
-	</PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- <GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath> -->
+  </PropertyGroup>
 
-	<ItemGroup>
-		<!-- 场景 A: 本地开发 (没有 CI 标记) -->
-		<!-- 正常引用，享受自动路径检测和自动部署 -->
-		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" Condition="'$(CI)' != 'true'" />
+  <ItemGroup>
+    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
+  </ItemGroup>
 
-		<!-- 场景 B: GitHub Actions (有 CI 标记) -->
-		<!-- 关键点 1: ExcludeAssets="build" -> 禁止加载包的构建脚本，彻底根除 "找不到游戏路径" 的报错 -->
-		<!-- 关键点 2: GeneratePathProperty="true" -> 生成变量，让我们能找到包里的 DLL -->
-		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" Condition="'$(CI)' == 'true'" IncludeAssets="compile;runtime" ExcludeAssets="build" GeneratePathProperty="true" />
-	</ItemGroup>
-
-	<!-- ⬇️ 手动引用 DLL (仅在 GitHub Actions 下生效) -->
-	<!-- 既然我们禁用了包的构建脚本，就需要手动告诉编译器 DLL 在哪。 -->
-	<!-- $(PkgPathoschild_Stardew_ModBuildConfig) 是由 GeneratePathProperty 自动生成的路径变量 -->
-	<ItemGroup Condition="'$(CI)' == 'true'">
-		<Reference Include="Stardew Valley">
-			<HintPath>$(PkgPathoschild_Stardew_ModBuildConfig)\lib\net6.0\Stardew Valley.dll</HintPath>
-		</Reference>
-		<Reference Include="StardewModdingAPI">
-			<HintPath>$(PkgPathoschild_Stardew_ModBuildConfig)\lib\net6.0\StardewModdingAPI.dll</HintPath>
-		</Reference>
-	</ItemGroup>
-
-	<!-- 本地路径配置 (仅本地生效) -->
-	<PropertyGroup Condition="'$(CI)' != 'true' AND Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">
-		<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<None Include=".github\workflows\release.yml" />
-	</ItemGroup>
+  <ItemGroup>
+    <None Include=".github\workflows\release.yml" />
+  </ItemGroup>
 
 </Project>

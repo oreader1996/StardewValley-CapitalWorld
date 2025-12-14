@@ -32,11 +32,35 @@ namespace FarmHelper.Services
         public bool IsHired(string npcName) => _workers.Value.ContainsKey(npcName);
         public bool HasAnyWorker => _workers.Value.Count > 0;
         
-        // 内部类：存储工人信息
-        private class WorkerInfo
+        // 内部类：存储工人信息（公开供UI访问）
+        public class WorkerInfo
         {
-            public NPC Npc { get; set; }
+            public NPC? Npc { get; set; }
             public WorkType Tasks { get; set; }
+            public float Stamina { get; set; }
+            public float MaxStamina { get; set; }
+            public bool IsResting { get; set; } = false; // 是否在休息恢复体力
+        }
+        
+        // 体力相关常量
+        private const float STAMINA_COST_PER_ACTION = 8f; // 每次工作消耗的体力
+        private const float STAMINA_RECOVERY_RATE = 2f; // 每秒恢复的体力
+        private const float REST_THRESHOLD = 50f; // 体力低于此值时开始休息
+        
+        /// <summary>
+        /// 获取工人信息（供UI调用）
+        /// </summary>
+        public WorkerInfo? GetWorkerInfo(string npcName)
+        {
+            return _workers.Value.TryGetValue(npcName, out var info) ? info : null;
+        }
+        
+        /// <summary>
+        /// 获取主角的最大体力值
+        /// </summary>
+        private float GetPlayerMaxStamina()
+        {
+            return Game1.player.MaxStamina;
         }
 
         public WorkerService(IModHelper helper, IMonitor monitor, ModConfig config)
@@ -177,11 +201,17 @@ namespace FarmHelper.Services
                 currentLocation = farm
             };
 
+            // 获取主角的最大体力值
+            float maxStamina = GetPlayerMaxStamina();
+            
             // 存储工人信息
             _workers.Value[templateNpc.Name] = new WorkerInfo
             {
                 Npc = npc,
-                Tasks = tasks
+                Tasks = tasks,
+                Stamina = maxStamina,
+                MaxStamina = maxStamina,
+                IsResting = false
             };
             _workerTargets.Value[templateNpc.Name] = null;
             
@@ -214,9 +244,34 @@ namespace FarmHelper.Services
             if (!_workers.Value.TryGetValue(npcName, out var workerInfo) || workerInfo.Npc == null) return;
             Farm farm = Game1.getFarm();
 
+            // 体力恢复逻辑（每秒恢复）
+            if (workerInfo.IsResting)
+            {
+                workerInfo.Stamina += STAMINA_RECOVERY_RATE;
+                if (workerInfo.Stamina >= workerInfo.MaxStamina)
+                {
+                    workerInfo.Stamina = workerInfo.MaxStamina;
+                    workerInfo.IsResting = false;
+                }
+                return; // 休息时不工作
+            }
+
+            // 检查体力是否耗尽
+            if (workerInfo.Stamina <= REST_THRESHOLD)
+            {
+                workerInfo.IsResting = true;
+                return; // 开始休息
+            }
+
             if (!_workerTargets.Value.TryGetValue(npcName, out var targetTile) || targetTile == null)
             {
-                targetTile = FindTargetFromPlayer(farm, workerInfo.Tasks);
+                // 获取所有其他工人已选择的目标，避免重叠
+                var occupiedTiles = _workerTargets.Value
+                    .Where(kvp => kvp.Key != npcName && kvp.Value.HasValue)
+                    .Select(kvp => kvp.Value!.Value)  // HasValue 已检查，使用 ! 断言非空
+                    .ToHashSet();
+                
+                targetTile = FindTargetFromPlayer(farm, workerInfo.Tasks, workerInfo.Npc.Tile, occupiedTiles);
                 _workerTargets.Value[npcName] = targetTile;
 
                 if (targetTile == null)
@@ -237,6 +292,10 @@ namespace FarmHelper.Services
 
                 if (isDone)
                 {
+                    // 消耗体力
+                    workerInfo.Stamina -= STAMINA_COST_PER_ACTION;
+                    if (workerInfo.Stamina < 0) workerInfo.Stamina = 0;
+                    
                     _workerTargets.Value[npcName] = null;
                 }
             }
@@ -246,16 +305,23 @@ namespace FarmHelper.Services
             }
         }
 
-        private Vector2? FindTargetFromPlayer(Farm farm, WorkType tasks)
+        private Vector2? FindTargetFromPlayer(Farm farm, WorkType tasks, Vector2 workerPosition, HashSet<Vector2> occupiedTiles)
         {
             var candidates = new List<Vector2>();
+            
+            // 如果选择了"全干"，则包括所有任务类型
+            if (tasks.HasFlag(WorkType.All))
+            {
+                tasks = WorkType.Weeds | WorkType.Stone | WorkType.Wood | WorkType.Watering | WorkType.Collecting;
+            }
 
-            // 1. Objects (Weeds, Stones, Twigs)
-            if (tasks.HasFlag(WorkType.Weeds) || tasks.HasFlag(WorkType.Stone) || tasks.HasFlag(WorkType.Wood))
+            // 1. Objects (Weeds, Stones, Twigs, Collectibles)
+            if (tasks.HasFlag(WorkType.Weeds) || tasks.HasFlag(WorkType.Stone) || tasks.HasFlag(WorkType.Wood) || tasks.HasFlag(WorkType.Collecting))
             {
                 foreach (var pair in farm.Objects.Pairs)
                 {
-                    if (IsTargetObject(pair.Value, tasks)) candidates.Add(pair.Key);
+                    if (IsTargetObject(pair.Value, tasks) && !occupiedTiles.Contains(pair.Key))
+                        candidates.Add(pair.Key);
                 }
             }
 
@@ -263,14 +329,20 @@ namespace FarmHelper.Services
             foreach (var pair in farm.terrainFeatures.Pairs)
             {
                  // Tree check
-                 if (tasks.HasFlag(WorkType.Wood) && IsChoppableTree(pair.Value)) 
+                 if (tasks.HasFlag(WorkType.Wood) && IsChoppableTree(pair.Value) && !occupiedTiles.Contains(pair.Key))
                  {
                      candidates.Add(pair.Key);
                      continue;
                  }
 
                  // Watering check
-                 if (tasks.HasFlag(WorkType.Watering) && IsUnwateredCrop(pair.Value))
+                 if (tasks.HasFlag(WorkType.Watering) && IsUnwateredCrop(pair.Value) && !occupiedTiles.Contains(pair.Key))
+                 {
+                     candidates.Add(pair.Key);
+                 }
+                 
+                 // Collecting check - 收集成熟的作物
+                 if (tasks.HasFlag(WorkType.Collecting) && IsCollectibleCrop(pair.Value) && !occupiedTiles.Contains(pair.Key))
                  {
                      candidates.Add(pair.Key);
                  }
@@ -278,11 +350,9 @@ namespace FarmHelper.Services
 
             if (candidates.Count == 0) return null;
 
-            Vector2 playerTile = Game1.player.Tile;
-
-            // 最近邻
+            // 从工人当前位置找最近的目标，而不是从玩家位置
             return candidates
-                .OrderBy(v => Vector2.DistanceSquared(v, playerTile))
+                .OrderBy(v => Vector2.DistanceSquared(v, workerPosition))
                 .FirstOrDefault();
         }
 
@@ -293,11 +363,31 @@ namespace FarmHelper.Services
             bool isWeed = obj.IsWeeds();
             bool isStone = obj.Name != null && obj.Name.Contains("Stone");
             bool isTwig = obj.IsTwig();
+            
+            // 收集任务：收集可收集的物品（不是杂草、石头、树枝的物品）
+            bool isCollectible = tasks.HasFlag(WorkType.Collecting) && 
+                                !isWeed && !isStone && !isTwig && 
+                                obj.CanBeGrabbed;
 
             if (tasks.HasFlag(WorkType.Weeds) && isWeed) return true;
             if (tasks.HasFlag(WorkType.Stone) && isStone) return true;
             if (tasks.HasFlag(WorkType.Wood) && isTwig) return true;
+            if (isCollectible) return true;
 
+            return false;
+        }
+        
+        private bool IsCollectibleCrop(TerrainFeature tf)
+        {
+            if (tf is HoeDirt dirt && dirt.crop != null)
+            {
+                // 检查作物是否成熟
+                if (dirt.crop.phaseDays != null && dirt.crop.phaseDays.Count > 0)
+                {
+                    return dirt.crop.currentPhase.Value >= dirt.crop.phaseDays.Count - 1 && 
+                           dirt.crop.fullyGrown.Value;
+                }
+            }
             return false;
         }
 
@@ -367,17 +457,39 @@ namespace FarmHelper.Services
             
             npc.Sprite.setCurrentAnimation(animFrames);
 
+            // 如果选择了"全干"，则包括所有任务类型
+            if (tasks.HasFlag(WorkType.All))
+            {
+                tasks = WorkType.Weeds | WorkType.Stone | WorkType.Wood | WorkType.Watering | WorkType.Collecting;
+            }
+
             // 1. Terrain Features (Trees, Crops)
             if (farm.terrainFeatures.TryGetValue(tile, out TerrainFeature tf))
             {
-                // Watering
-                if (tf is HoeDirt dirt && tasks.HasFlag(WorkType.Watering))
+                // Collecting - 收集成熟的作物
+                if (tf is HoeDirt dirt && tasks.HasFlag(WorkType.Collecting))
                 {
-                    if (dirt.state.Value == 0) // if dry
+                    if (dirt.crop != null && dirt.crop.phaseDays != null && dirt.crop.phaseDays.Count > 0 &&
+                        dirt.crop.currentPhase.Value >= dirt.crop.phaseDays.Count - 1 && 
+                        dirt.crop.fullyGrown.Value)
+                    {
+                        // 收获作物
+                        if (dirt.crop.harvest((int)tile.X, (int)tile.Y, dirt))
+                        {
+                            if (_config.EnableSoundEffects) Game1.playSound("harvest");
+                            return true;
+                        }
+                    }
+                }
+                
+                // Watering
+                if (tf is HoeDirt dirt2 && tasks.HasFlag(WorkType.Watering))
+                {
+                    if (dirt2.state.Value == 0) // if dry
                     {
                          WateringCan can = new WateringCan();
                          can.WaterLeft = 100;
-                         dirt.performToolAction(can, 0, tile);
+                         dirt2.performToolAction(can, 0, tile);
                          if (_config.EnableSoundEffects) Game1.playSound("wateringCan");
                          return true; // Done
                     }
@@ -402,23 +514,38 @@ namespace FarmHelper.Services
 
         private bool ProcessObject(Farm farm, Vector2 tile, StardewValley.Object obj, WorkType tasks)
         {
-             Tool tool = (obj.Name != null && obj.Name.Contains("Stone")) ? (Tool)new Pickaxe() : (Tool)new Axe();
-             tool.UpgradeLevel = 4;
+            // 收集任务：收集可收集的物品
+            if (tasks.HasFlag(WorkType.Collecting) && obj.CanBeGrabbed && !obj.IsWeeds() && 
+                (obj.Name == null || (!obj.Name.Contains("Stone") && !obj.IsTwig())))
+            {
+                // 收集物品到玩家背包
+                if (Game1.player.addItemToInventoryBool(obj.getOne()))
+                {
+                    if (_config.EnableSoundEffects) Game1.playSound("pickUp");
+                    farm.Objects.Remove(tile);
+                    return true;
+                }
+                return false; // 背包满了
+            }
+            
+            // 其他任务：清理杂草、石头、树枝
+            Tool tool = (obj.Name != null && obj.Name.Contains("Stone")) ? (Tool)new Pickaxe() : (Tool)new Axe();
+            tool.UpgradeLevel = 4;
 
-             if (_config.EnableSoundEffects)
-             {
-                 if (obj.Name != null && obj.Name.Contains("Stone")) Game1.playSound("hammer");
-                 else Game1.playSound("cut");
-             }
+            if (_config.EnableSoundEffects)
+            {
+                if (obj.Name != null && obj.Name.Contains("Stone")) Game1.playSound("hammer");
+                else Game1.playSound("cut");
+            }
 
-             try { obj.performToolAction(tool); } catch { }
+            try { obj.performToolAction(tool); } catch { }
 
-             if (farm.Objects.ContainsKey(tile))
-             {
-                 Game1.createItemDebris(obj.getOne(), tile * 64f, -1);
-                 farm.Objects.Remove(tile);
-             }
-             return true;
+            if (farm.Objects.ContainsKey(tile))
+            {
+                Game1.createItemDebris(obj.getOne(), tile * 64f, -1);
+                farm.Objects.Remove(tile);
+            }
+            return true;
         }
 
         private bool ProcessTree(Farm farm, Vector2 tile, Tree tree)

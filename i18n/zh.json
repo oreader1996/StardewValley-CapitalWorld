@@ -6,8 +6,10 @@
     "message.finish_work": "下班时间到了，明天见！",
     "message.no_work": "附近没活干了。",
     "message.dismissed": "已解雇 {{name}}。",
+    "message.npc_busy": "{{name}} 正在执行其他任务，无法雇佣。",
     "npc.name": "开荒助手",
     "ui.title": "雇佣农场助手",
+    "ui.task_title": "任务类型:",
     "ui.tasks": "选择任务:",
     "ui.workers": "选择工人:",
     "ui.hire": "雇佣",
@@ -16,5 +18,7 @@
     "task.weeds": "清理杂草",
     "task.stone": "清理石头",
     "task.wood": "砍伐木材",
-    "task.watering": "浇灌作物"
+    "task.watering": "浇灌作物",
+    "task.collecting": "收集东西",
+    "task.all": "全干"
 }

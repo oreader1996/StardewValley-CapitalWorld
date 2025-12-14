@@ -6,8 +6,10 @@
   "message.finish_work": "Work time is over. See you tomorrow!",
   "message.no_work": "Nothing to do nearby.",
   "message.dismissed": "Dismissed {{name}}.",
+  "message.npc_busy": "{{name}} is busy with another task and cannot be hired.",
   "npc.name": "Farm Helper",
   "ui.title": "Hire Farm Helper",
+  "ui.task_title": "Task Type:",
   "ui.tasks": "Select Tasks:",
   "ui.workers": "Select Worker:",
   "ui.hire": "Hire",
@@ -16,5 +18,7 @@
   "task.weeds": "Clear Weeds",
   "task.stone": "Clear Stone",
   "task.wood": "Chop Wood",
-  "task.watering": "Water Crops"
+  "task.watering": "Water Crops",
+  "task.collecting": "Collect Items",
+  "task.all": "All Tasks"
 }

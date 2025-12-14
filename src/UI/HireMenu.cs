@@ -58,6 +58,8 @@ namespace FarmHelper.UI
             _taskLabels[WorkType.Stone] = _helper.Translation.Get("task.stone");
             _taskLabels[WorkType.Wood] = _helper.Translation.Get("task.wood");
             _taskLabels[WorkType.Watering] = _helper.Translation.Get("task.watering");
+            _taskLabels[WorkType.Collecting] = _helper.Translation.Get("task.collecting");
+            _taskLabels[WorkType.All] = _helper.Translation.Get("task.all");
             
             this.LoadNpcs();
             this.InitializeComponents();
@@ -65,10 +67,23 @@ namespace FarmHelper.UI
 
         private void LoadNpcs()
         {
-             _availableNpcs = Utility.getAllCharacters()
-                .Where(n => n.IsVillager && !n.IsMonster && n.Name != "FarmHelper")
-                .OrderByDescending(n => Game1.player.getFriendshipLevelForNPC(n.Name))
+             // 获取所有NPC，按名称去重，确保每个NPC只出现一次
+             var allNpcs = Utility.getAllCharacters()
+                .Where(n => n != null && n.IsVillager && !n.IsMonster && !string.IsNullOrEmpty(n.Name) && n.Name != "FarmHelper")
+                .GroupBy(n => n.Name!)
+                .Select(g => 
+                {
+                    // 如果这个NPC已雇佣，优先使用农场中的实例
+                    var hiredNpc = Game1.getFarm().characters.FirstOrDefault(c => c != null && c.Name == g.Key);
+                    return hiredNpc ?? g.First(); // 如果已雇佣就用农场实例，否则用第一个
+                })
+                .Where(n => n != null)
+                .Distinct() // 确保没有重复
+                .OrderByDescending(n => Game1.player.getFriendshipLevelForNPC(n.Name ?? ""))
+                .ThenBy(n => _workerService.IsHired(n.Name ?? "") ? 0 : 1) // 已雇佣的排在前面
                 .ToList();
+             
+             _availableNpcs = allNpcs;
         }
 
         private void InitializeComponents()
@@ -80,18 +95,27 @@ namespace FarmHelper.UI
                 new Rectangle(337, 494, 12, 12),
                 4f);
 
-            // Tasks (One Row)
-            int taskY = yPositionOnScreen + 100;
+            // Task Title
+            int taskTitleY = yPositionOnScreen + 80;
+            
+            // Tasks (Two Rows)
+            int taskY = yPositionOnScreen + 120;
             int startX = xPositionOnScreen + 50;
-            int spacing = 180;
+            int spacing = 150; // 减小间距以容纳更多任务
 
+            // First Row
             _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Weeds], WorkType.Weeds, startX, taskY));
             _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Stone], WorkType.Stone, startX + spacing, taskY));
             _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Wood], WorkType.Wood, startX + spacing * 2, taskY));
             _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Watering], WorkType.Watering, startX + spacing * 3, taskY));
+            
+            // Second Row
+            int taskY2 = taskY + 50;
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.Collecting], WorkType.Collecting, startX, taskY2));
+            _taskCheckboxes.Add(CreateCheckbox(_taskLabels[WorkType.All], WorkType.All, startX + spacing, taskY2));
 
             // Scroll UI
-            _listStartY = yPositionOnScreen + 180;
+            _listStartY = yPositionOnScreen + 240;
             int listHeight = ITEMS_PER_PAGE * ITEM_HEIGHT + (ITEMS_PER_PAGE * ROW_PADDING);
             
             _upArrow = new ClickableTextureComponent(
@@ -126,12 +150,20 @@ namespace FarmHelper.UI
         private int CalculateCostForNpc(NPC npc)
         {
             if (_selectedTasks == WorkType.None) return 0;
+            
+            // 如果选择了"全干"，计算所有任务类型的费用
+            WorkType tasksToCalculate = _selectedTasks;
+            if (_selectedTasks.HasFlag(WorkType.All))
+            {
+                tasksToCalculate = WorkType.Weeds | WorkType.Stone | WorkType.Wood | WorkType.Watering | WorkType.Collecting;
+            }
 
             int baseTaskCost = 0;
-            if (_selectedTasks.HasFlag(WorkType.Weeds)) baseTaskCost += _config.CostPerTaskWeeds;
-            if (_selectedTasks.HasFlag(WorkType.Stone)) baseTaskCost += _config.CostPerTaskStone;
-            if (_selectedTasks.HasFlag(WorkType.Wood))  baseTaskCost += _config.CostPerTaskWood;
-            if (_selectedTasks.HasFlag(WorkType.Watering)) baseTaskCost += _config.CostPerTaskWatering;
+            if (tasksToCalculate.HasFlag(WorkType.Weeds)) baseTaskCost += _config.CostPerTaskWeeds;
+            if (tasksToCalculate.HasFlag(WorkType.Stone)) baseTaskCost += _config.CostPerTaskStone;
+            if (tasksToCalculate.HasFlag(WorkType.Wood))  baseTaskCost += _config.CostPerTaskWood;
+            if (tasksToCalculate.HasFlag(WorkType.Watering)) baseTaskCost += _config.CostPerTaskWatering;
+            if (tasksToCalculate.HasFlag(WorkType.Collecting)) baseTaskCost += _config.CostPerTaskWeeds; // 收集使用和杂草相同的价格
 
             int hiringCost = _config.BaseHiringCost + baseTaskCost;
 
@@ -140,6 +172,55 @@ namespace FarmHelper.UI
             if (discount > 0.8f) discount = 0.8f; 
 
             return (int)(hiringCost * (1.0f - discount));
+        }
+        
+        private bool IsNpcBusy(NPC npc)
+        {
+            if (npc == null || string.IsNullOrEmpty(npc.Name)) return false;
+            
+            // 检查NPC是否在任务中（比如罗宾在修房子）
+            // 检查是否有正在进行的建筑任务
+            if (Game1.player.team?.buildLock?.IsLocked() == true)
+            {
+                // 检查是否是建筑相关的NPC
+                if (npc.Name == "Robin" || npc.Name == "Demetrius" || npc.Name == "Maru")
+                {
+                    // 检查是否有正在建造的建筑
+                    var farm = Game1.getFarm();
+                    if (farm?.buildings != null)
+                    {
+                        foreach (var building in farm.buildings)
+                        {
+                            if (building != null && building.daysOfConstructionLeft.Value > 0)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 检查是否有特殊订单涉及这个NPC
+            if (Game1.player.team?.specialOrders != null)
+            {
+                foreach (var order in Game1.player.team.specialOrders)
+                {
+                    if (order != null && order.requester.Value == npc.Name)
+                    {
+                        // 检查订单是否未完成（不是完成状态）
+                        // questState.Value 返回 SpecialOrderStatus 枚举类型
+                        var questState = order.questState.Value;
+                        // 将枚举转换为整数进行比较：0=NotStarted, 1=InProgress, 2=Complete
+                        // 2 表示完成状态，如果不是完成状态，说明NPC正在执行任务
+                        if ((int)questState != 2) // 2 = Complete
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
         }
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
@@ -158,10 +239,26 @@ namespace FarmHelper.UI
                 if (checkbox.containsPoint(x, y))
                 {
                     WorkType type = (WorkType)checkbox.myID;
-                    if (_selectedTasks.HasFlag(type))
-                        _selectedTasks &= ~type;
+                    
+                    // 如果选择了"全干"，清除其他所有任务
+                    if (type == WorkType.All)
+                    {
+                        if (_selectedTasks.HasFlag(WorkType.All))
+                            _selectedTasks = WorkType.None;
+                        else
+                            _selectedTasks = WorkType.All;
+                    }
                     else
-                        _selectedTasks |= type;
+                    {
+                        // 如果当前选择了"全干"，选择其他任务时清除"全干"
+                        if (_selectedTasks.HasFlag(WorkType.All))
+                            _selectedTasks = WorkType.None;
+                        
+                        if (_selectedTasks.HasFlag(type))
+                            _selectedTasks &= ~type;
+                        else
+                            _selectedTasks |= type;
+                    }
                     
                     Game1.playSound("drumkit6");
                     return; // Task changed, no need to check other clicks
@@ -181,37 +278,53 @@ namespace FarmHelper.UI
 
                 int rowY = _listStartY + (i * ITEM_HEIGHT) + (i * ROW_PADDING);
                 NPC npc = _availableNpcs[index];
+                if (npc == null || string.IsNullOrEmpty(npc.Name)) continue;
                 bool isHired = _workerService.IsHired(npc.Name);
 
-                // 计算按钮位置
-                int buttonStartX = xPositionOnScreen + width - 64 - BUTTON_WIDTH * 2 - 20; // 两个按钮，右边留空间给滚动条
-                int hireButtonX = buttonStartX;
-                int dismissButtonX = buttonStartX + BUTTON_WIDTH + 10;
+                // 计算按钮位置（只有一个按钮位置）
+                int buttonX = xPositionOnScreen + width - 64 - BUTTON_WIDTH - 10;
 
                 // Hire Button
-                Rectangle hireBtnRect = new Rectangle(hireButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
-                if (hireBtnRect.Contains(x, y) && !isHired)
+                if (!isHired)
                 {
-                    int cost = CalculateCostForNpc(npc);
-                    if (cost > 0 && _selectedTasks != WorkType.None)
+                    Rectangle hireBtnRect = new Rectangle(buttonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                    if (hireBtnRect.Contains(x, y))
                     {
-                        _workerService.HireWorker(npc, _selectedTasks, cost);
-                        Game1.playSound("smallSelect");
+                        // 检查NPC是否在任务中
+                        if (IsNpcBusy(npc))
+                        {
+                            Game1.addHUDMessage(new HUDMessage(_helper.Translation.Get("message.npc_busy", new { name = npc.displayName }), 3));
+                            Game1.playSound("cancel");
+                            return;
+                        }
+                        
+                        int cost = CalculateCostForNpc(npc);
+                        if (cost > 0 && _selectedTasks != WorkType.None)
+                        {
+                            _workerService.HireWorker(npc, _selectedTasks, cost);
+                            Game1.playSound("smallSelect");
+                        }
+                        else
+                        {
+                            Game1.playSound("cancel");
+                        }
+                        return;
                     }
-                    else
-                    {
-                        Game1.playSound("cancel");
-                    }
-                    return;
                 }
 
                 // Dismiss Button
-                Rectangle dismissBtnRect = new Rectangle(dismissButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
-                if (dismissBtnRect.Contains(x, y) && isHired)
+                if (isHired)
                 {
-                    _workerService.DismissWorker(npc.Name);
-                    Game1.playSound("smallSelect");
-                    return;
+                    Rectangle dismissBtnRect = new Rectangle(buttonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                    if (dismissBtnRect.Contains(x, y))
+                    {
+                        if (!string.IsNullOrEmpty(npc.Name))
+                        {
+                            _workerService.DismissWorker(npc.Name);
+                            Game1.playSound("smallSelect");
+                        }
+                        return;
+                    }
                 }
             }
         }
@@ -219,7 +332,7 @@ namespace FarmHelper.UI
         public override void leftClickHeld(int x, int y)
         {
             base.leftClickHeld(x, y);
-            if (_scrolling)
+            if (_scrolling && _scrollBar != null)
             {
                 int totalHeight = _scrollBarRunner.Height - _scrollBar.bounds.Height;
                 if (totalHeight <= 0) return;
@@ -283,6 +396,12 @@ namespace FarmHelper.UI
             Utility.drawTextWithShadow(b, title, Game1.dialogueFont, 
                 new Vector2(xPositionOnScreen + width / 2 - Game1.dialogueFont.MeasureString(title).X / 2, yPositionOnScreen + 30), 
                 Game1.textColor);
+            
+            // Task Title
+            string taskTitle = _helper.Translation.Get("ui.task_title");
+            Utility.drawTextWithShadow(b, taskTitle, Game1.smallFont, 
+                new Vector2(xPositionOnScreen + 50, yPositionOnScreen + 85), 
+                Game1.textColor);
 
             // Tasks - 使用翻译后的标签
             foreach (var checkbox in _taskCheckboxes)
@@ -314,15 +433,17 @@ namespace FarmHelper.UI
                 if (index >= _availableNpcs.Count) break;
                 
                 NPC npc = _availableNpcs[index];
+                if (npc == null || string.IsNullOrEmpty(npc.Name)) continue;
                 int rowY = _listStartY + (i * ITEM_HEIGHT) + (i * ROW_PADDING);
                 bool isHired = _workerService.IsHired(npc.Name);
                 int cost = CalculateCostForNpc(npc);
                 bool canAfford = Game1.player.Money >= cost;
                 bool canHire = cost > 0 && canAfford && !isHired && _selectedTasks != WorkType.None;
 
-                // Row Background
+                // Row Background - 修复边框宽度，确保铺满（减去按钮和滚动条宽度）
+                int rowWidth = width - 100 - 64; // 减去左右边距和滚动条宽度
                 IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(384, 396, 15, 15), 
-                    xPositionOnScreen + 50, rowY, width - 150, ITEM_HEIGHT, Color.White, 4f, false);
+                    xPositionOnScreen + 50, rowY, rowWidth, ITEM_HEIGHT, Color.White, 4f, false);
 
                 // Portrait (头像) - 第一列
                 int portraitX = xPositionOnScreen + 60;
@@ -353,21 +474,37 @@ namespace FarmHelper.UI
                      b.DrawString(Game1.smallFont, $"{hearts}", new Vector2(heartsX + 30, rowY + 25), Color.Red);
                 }
 
-                // Cost Text - 第四列
+                // Cost/Stamina Text - 第四列
                 int costX = heartsX + 100;
-                string costText = isHired ? _helper.Translation.Get("ui.dismiss") : $"{cost}g";
-                Color costColor = isHired ? Color.Gray : (canAfford ? Color.DarkGoldenrod : Color.Red);
-                b.DrawString(Game1.smallFont, costText, new Vector2(costX, rowY + 25), costColor);
+                if (isHired)
+                {
+                    // 显示体力值
+                    var workerInfo = _workerService.GetWorkerInfo(npc.Name);
+                    if (workerInfo != null && workerInfo.Npc != null)
+                    {
+                        float currentStamina = workerInfo.Stamina;
+                        float maxStamina = workerInfo.MaxStamina;
+                        string staminaText = $"{(int)currentStamina}/{(int)maxStamina}";
+                        Color staminaColor = currentStamina < maxStamina * 0.3f ? Color.Red : 
+                                           (currentStamina < maxStamina * 0.6f ? Color.Orange : Color.Green);
+                        b.DrawString(Game1.smallFont, staminaText, new Vector2(costX, rowY + 25), staminaColor);
+                    }
+                }
+                else
+                {
+                    // 显示价格
+                    string costText = $"{cost}g";
+                    Color costColor = canAfford ? Color.DarkGoldenrod : Color.Red;
+                    b.DrawString(Game1.smallFont, costText, new Vector2(costX, rowY + 25), costColor);
+                }
 
-                // Buttons - 第五列（最右边）
-                int buttonStartX = xPositionOnScreen + width - 64 - BUTTON_WIDTH * 2 - 20;
-                int hireButtonX = buttonStartX;
-                int dismissButtonX = buttonStartX + BUTTON_WIDTH + 10;
+                // Buttons - 第五列（最右边，只有一个按钮）
+                int buttonX = xPositionOnScreen + width - 64 - BUTTON_WIDTH - 10;
 
-                // Hire Button
+                // Hire Button（未雇佣时显示）
                 if (!isHired)
                 {
-                    Rectangle hireBtnRect = new Rectangle(hireButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                    Rectangle hireBtnRect = new Rectangle(buttonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
                     IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(448, 262, 18, 16), 
                         hireBtnRect.X, hireBtnRect.Y, hireBtnRect.Width, hireBtnRect.Height, 
                         canHire ? Color.White : Color.Gray, 4f, false);
@@ -380,10 +517,10 @@ namespace FarmHelper.UI
                         canHire ? Game1.textColor : Color.DimGray);
                 }
 
-                // Dismiss Button
+                // Dismiss Button（已雇佣时显示）
                 if (isHired)
                 {
-                    Rectangle dismissBtnRect = new Rectangle(dismissButtonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
+                    Rectangle dismissBtnRect = new Rectangle(buttonX, rowY + 15, BUTTON_WIDTH, BUTTON_HEIGHT);
                     IClickableMenu.drawTextureBox(b, Game1.mouseCursors, new Rectangle(448, 262, 18, 16), 
                         dismissBtnRect.X, dismissBtnRect.Y, dismissBtnRect.Width, dismissBtnRect.Height, 
                         Color.White, 4f, false);
