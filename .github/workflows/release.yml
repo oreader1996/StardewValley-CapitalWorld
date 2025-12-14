@@ -1,43 +1,51 @@
-name: Build and Release CapitalWorld Mod
+﻿name: Build and Release CapitalWorld Mod
 
 on:
   push:
     tags:
-      - 'v*.*.*'   # ����汾 tag ���������� v1.0.0
+      - 'v*.*.*'   # 当打版本 tag 触发，例如 v1.0.0
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      # 1️⃣ 获取代码
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '6.0.x'
+      # 2️⃣ 安装 .NET 6 SDK
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '6.0.x'
 
-    - name: Restore dependencies
-      run: dotnet restore
+      # 3️⃣ 还原 NuGet 包
+      - name: Restore dependencies
+        run: dotnet restore
 
-    - name: Build project
-      run: dotnet build --configuration Release
+      # 4️⃣ 构建项目，忽略本地游戏路径
+      - name: Build project
+        run: dotnet build --configuration Release /p:BuildOnly=true
 
-    - name: Collect output files
-      run: |
-        mkdir release
-        copy /Y bin\Release\net6.0\CapitalWorld.dll release\
-        copy /Y manifest.json release\
+      # 5️⃣ 收集输出文件
+      - name: Prepare release folder
+        run: |
+          if (Test-Path release) { Remove-Item -Recurse -Force release }
+          New-Item -ItemType Directory -Path release
+          copy /Y bin\Release\net6.0\CapitalWorld.dll release\
+          copy /Y manifest.json release\
 
-    - name: Create release zip
-      run: powershell Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip
+      # 6️⃣ 打包成 ZIP
+      - name: Create release zip
+        run: powershell Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
-    - name: Upload Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.ref }}
-        name: Release ${{ github.ref }}
-        files: CapitalWorld.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 7️⃣ 上传到 GitHub Release
+      - name: Upload release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref }}
+          files: CapitalWorld.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
