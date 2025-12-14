@@ -22,9 +22,9 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ✅ 直接构建，无需任何额外参数，因为 .csproj 会自动处理路径
+      # ⬇️ 关键点：添加 /p:CI=true 参数
       - name: Build project
-        run: dotnet build --configuration Release
+        run: dotnet build --configuration Release /p:CI=true
 
       - name: Prepare release folder
         shell: pwsh
