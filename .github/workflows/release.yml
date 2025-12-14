@@ -26,7 +26,7 @@ jobs:
 
       # 4️⃣ 构建项目，忽略本地游戏路径
       - name: Build project
-        run: dotnet build --configuration Release /p:BuildOnly=true
+        run: dotnet build --configuration Release /p:BuildOnly=true /p:GamePath=C:\StardewValley
 
       # 5️⃣ 收集输出文件
       - name: Prepare release folder
