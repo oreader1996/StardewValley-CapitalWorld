@@ -4,21 +4,44 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<!-- 默认禁用部署，防止在 CI 环境下报错 -->
-		<EnableModDeploy>false</EnableModDeploy>
-		<EnableGameDebugging>false</EnableGameDebugging>
 	</PropertyGroup>
 
-	<!-- ⬇️ 只有当你电脑上真的有这个文件时，才启用本地路径 -->
-	<!-- 注意：这里只负责你本地开发，GitHub 上会自动跳过这一段 -->
-	<PropertyGroup Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley\Stardew Valley.exe')">
-		<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
-		<EnableModDeploy>true</EnableModDeploy>
-		<EnableGameDebugging>true</EnableGameDebugging>
+	<!-- ⬇️⬇️⬇️ 核心修复逻辑 ⬇️⬇️⬇️ -->
+
+	<PropertyGroup>
+		<!-- 1. 定义你电脑上的本地游戏路径 -->
+		<LocalGamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</LocalGamePath>
 	</PropertyGroup>
+
+	<Choose>
+		<!-- 情况 A: 你的电脑 (本地路径存在) -->
+		<When Condition="Exists('$(LocalGamePath)')">
+			<PropertyGroup>
+				<GamePath>$(LocalGamePath)</GamePath>
+				<EnableModDeploy>true</EnableModDeploy>
+				<EnableGameDebugging>true</EnableGameDebugging>
+			</PropertyGroup>
+		</When>
+
+		<!-- 情况 B: GitHub Actions (本地路径不存在) -->
+		<Otherwise>
+			<PropertyGroup>
+				<!-- 重点：既然没有游戏，我们就直接指向 NuGet 包里自带的 DLL 文件夹！ -->
+				<!-- PkgPathoschild_Stardew_ModBuildConfig 是下面 GeneratePathProperty 自动生成的变量 -->
+				<GamePath>$(PkgPathoschild_Stardew_ModBuildConfig)\lib\net6.0</GamePath>
+
+				<!-- 禁用部署，因为我们只是借用 DLL 来编译 -->
+				<EnableModDeploy>false</EnableModDeploy>
+				<EnableGameDebugging>false</EnableGameDebugging>
+			</PropertyGroup>
+		</Otherwise>
+	</Choose>
+
+	<!-- ⬆️⬆️⬆️ 修改结束 ⬆️⬆️⬆️ -->
 
 	<ItemGroup>
-		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
+		<!-- ✅ 注意这里多了 GeneratePathProperty="true" -->
+		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" GeneratePathProperty="true" />
 	</ItemGroup>
 
 	<ItemGroup>
