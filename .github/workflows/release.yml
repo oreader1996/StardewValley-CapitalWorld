@@ -1,0 +1,43 @@
+name: Build and Release CapitalWorld Mod
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'   # 当打版本 tag 触发，例如 v1.0.0
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '6.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build project
+      run: dotnet build --configuration Release
+
+    - name: Collect output files
+      run: |
+        mkdir release
+        copy /Y bin\Release\net6.0\CapitalWorld.dll release\
+        copy /Y manifest.json release\
+
+    - name: Create release zip
+      run: powershell Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip
+
+    - name: Upload Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref }}
+        name: Release ${{ github.ref }}
+        files: CapitalWorld.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
