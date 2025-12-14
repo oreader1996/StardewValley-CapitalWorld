@@ -4,7 +4,9 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<GamePath Condition="'$(GamePath)'==''">D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath>
+	<GamePath Condition=" '$(GamePath)' == '' And Exists('D:\SteamLibrary\steamapps\common\Stardew Valley\') ">
+		D:\SteamLibrary\steamapps\common\Stardew Valley\
+	</GamePath>
   </PropertyGroup>
 
   <ItemGroup>
