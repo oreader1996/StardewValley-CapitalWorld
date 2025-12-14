@@ -22,9 +22,9 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ⬇️ 显式传递 GITHUB_ACTIONS 属性，配合 .csproj 的逻辑
+      # ✅ 构建命令简化，不再需要传递复杂的参数，全靠 .csproj 自动判断
       - name: Build project
-        run: dotnet build --configuration Release /p:GITHUB_ACTIONS=true
+        run: dotnet build --configuration Release
 
       - name: Prepare release folder
         shell: pwsh
@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
-      # 确保是 v4
+      # ✅ 必须是 v4 版本
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
