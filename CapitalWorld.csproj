@@ -1,53 +1,43 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- ⬇️ 只要是 CI 环境，就强制禁用部署，防止任何残留逻辑干扰 -->
+		<EnableModDeploy Condition="'$(CI)' == 'true'">false</EnableModDeploy>
+	</PropertyGroup>
 
-  <Choose>
-    <!-- 场景 1: GitHub Actions 环境 (检测 CI=true) -->
-    <When Condition="'$(CI)' == 'true'">
-      <PropertyGroup>
-        <!-- ⬇️ 暴力解法：直接指向 GitHub 服务器上的 NuGet 缓存目录 -->
-        <!-- 该目录下包含包自带的 Reference DLL，可以骗过验证 -->
-        <GamePath>$(UserProfile)\.nuget\packages\pathoschild.stardew.modbuildconfig\4.4.0\lib\net6.0</GamePath>
-        
-        <EnableModDeploy>false</EnableModDeploy>
-        <EnableGameDebugging>false</EnableGameDebugging>
-      </PropertyGroup>
-    </When>
+	<ItemGroup>
+		<!-- 场景 A: 本地开发 (没有 CI 标记) -->
+		<!-- 正常引用，享受自动路径检测和自动部署 -->
+		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" Condition="'$(CI)' != 'true'" />
 
-    <!-- 场景 2: 你的本地电脑 -->
-    <When Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">
-      <PropertyGroup>
-        <GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
-        <EnableModDeploy>true</EnableModDeploy>
-        <EnableGameDebugging>true</EnableGameDebugging>
-      </PropertyGroup>
-    </When>
-    
-    <!-- 场景 3: 其他情况 (兜底) -->
-    <Otherwise>
-       <PropertyGroup>
-         <!-- 不设置路径，防止报错 -->
-         <EnableModDeploy>false</EnableModDeploy>
-       </PropertyGroup>
-    </Otherwise>
-  </Choose>
+		<!-- 场景 B: GitHub Actions (有 CI 标记) -->
+		<!-- 关键点 1: ExcludeAssets="build" -> 禁止加载包的构建脚本，彻底根除 "找不到游戏路径" 的报错 -->
+		<!-- 关键点 2: GeneratePathProperty="true" -> 生成变量，让我们能找到包里的 DLL -->
+		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" Condition="'$(CI)' == 'true'" IncludeAssets="compile;runtime" ExcludeAssets="build" GeneratePathProperty="true" />
+	</ItemGroup>
 
-  <!-- ⬇️ 终极保险：如果上面路径还是有点问题，直接覆盖掉验证逻辑，禁止它报错 -->
-  <Target Name="ValidateGamePath">
-     <!-- 留空，啥也不干。这样构建工具就不会因为找不到路径而终止构建了。 -->
-  </Target>
+	<!-- ⬇️ 手动引用 DLL (仅在 GitHub Actions 下生效) -->
+	<!-- 既然我们禁用了包的构建脚本，就需要手动告诉编译器 DLL 在哪。 -->
+	<!-- $(PkgPathoschild_Stardew_ModBuildConfig) 是由 GeneratePathProperty 自动生成的路径变量 -->
+	<ItemGroup Condition="'$(CI)' == 'true'">
+		<Reference Include="Stardew Valley">
+			<HintPath>$(PkgPathoschild_Stardew_ModBuildConfig)\lib\net6.0\Stardew Valley.dll</HintPath>
+		</Reference>
+		<Reference Include="StardewModdingAPI">
+			<HintPath>$(PkgPathoschild_Stardew_ModBuildConfig)\lib\net6.0\StardewModdingAPI.dll</HintPath>
+		</Reference>
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
-  </ItemGroup>
+	<!-- 本地路径配置 (仅本地生效) -->
+	<PropertyGroup Condition="'$(CI)' != 'true' AND Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">
+		<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Include=".github\workflows\release.yml" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Include=".github\workflows\release.yml" />
+	</ItemGroup>
 
 </Project>
