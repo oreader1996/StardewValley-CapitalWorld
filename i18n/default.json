@@ -1,0 +1,18 @@
+{
+  "message.worker_busy": "The worker is already working!",
+  "message.not_enough_money": "Not enough money! Need {{cost}}g.",
+  "message.hired": "Hired {{name}}! (-{{cost}}g)",
+  "message.start_work": "{{name}}: I'm on it.",
+  "message.finish_work": "Work time is over. See you tomorrow!",
+  "message.no_work": "Nothing to do nearby.",
+  "npc.name": "Farm Helper",
+  "ui.title": "Hire Farm Helper",
+  "ui.tasks": "Select Tasks:",
+  "ui.workers": "Select Worker:",
+  "ui.hire": "Hire (-{{cost}}g)",
+  "ui.close": "Close",
+  "task.weeds": "Clear Weeds",
+  "task.stone": "Clear Stone",
+  "task.wood": "Chop Wood",
+  "task.watering": "Water Crops"
+}

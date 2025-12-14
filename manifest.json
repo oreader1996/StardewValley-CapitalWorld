@@ -1,0 +1,10 @@
+{
+  "Name": "CapitalWorld Farm Helper",
+  "Author": "Or¡¤Reader",
+  "Version": "1.0.0",
+  "Description": "Hire a helper to automatically clear weeds, stones, and twigs on your farm.",
+  "UniqueID": "CapitalWorld.Or",
+  "EntryDll": "CapitalWorld.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}

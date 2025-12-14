@@ -1,0 +1,8 @@
+C:\Users\zzp\source\repos\FarmHelper\obj\Debug\net6.0\FarmHelper.csproj.AssemblyReference.cache
+C:\Users\zzp\source\repos\FarmHelper\obj\Debug\net6.0\FarmHelper.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\zzp\source\repos\FarmHelper\obj\Debug\net6.0\FarmHelper.AssemblyInfoInputs.cache
+C:\Users\zzp\source\repos\FarmHelper\obj\Debug\net6.0\FarmHelper.AssemblyInfo.cs
+C:\Users\zzp\source\repos\FarmHelper\obj\Debug\net6.0\FarmHelper.csproj.CoreCompileInputs.cache
+C:\Users\zzp\source\repos\FarmHelper\bin\Debug\net6.0\FarmHelper.deps.json
+C:\Users\zzp\source\repos\FarmHelper\bin\Debug\net6.0\FarmHelper.dll
+C:\Users\zzp\source\repos\FarmHelper\obj\Debug\net6.0\FarmHelper.dll

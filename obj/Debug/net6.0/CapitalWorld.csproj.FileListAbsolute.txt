@@ -1,0 +1,8 @@
+C:\Users\zzp\source\repos\CapitalWorld\bin\Debug\net6.0\CapitalWorld.deps.json
+C:\Users\zzp\source\repos\CapitalWorld\bin\Debug\net6.0\CapitalWorld.dll
+C:\Users\zzp\source\repos\CapitalWorld\obj\Debug\net6.0\CapitalWorld.csproj.AssemblyReference.cache
+C:\Users\zzp\source\repos\CapitalWorld\obj\Debug\net6.0\CapitalWorld.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\zzp\source\repos\CapitalWorld\obj\Debug\net6.0\CapitalWorld.AssemblyInfoInputs.cache
+C:\Users\zzp\source\repos\CapitalWorld\obj\Debug\net6.0\CapitalWorld.AssemblyInfo.cs
+C:\Users\zzp\source\repos\CapitalWorld\obj\Debug\net6.0\CapitalWorld.csproj.CoreCompileInputs.cache
+C:\Users\zzp\source\repos\CapitalWorld\obj\Debug\net6.0\CapitalWorld.dll

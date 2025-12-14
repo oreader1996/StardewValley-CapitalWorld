@@ -1,0 +1,18 @@
+{
+    "message.worker_busy": "工人正在干活呢！",
+    "message.not_enough_money": "钱不够！需要 {{cost}}g.",
+    "message.hired": "已雇佣 {{name}}！(-{{cost}}g)",
+    "message.start_work": "{{name}}: 开始干活。",
+    "message.finish_work": "下班时间到了，明天见！",
+    "message.no_work": "附近没活干了。",
+    "npc.name": "开荒助手",
+    "ui.title": "雇佣农场助手",
+    "ui.tasks": "选择任务:",
+    "ui.workers": "选择工人:",
+    "ui.hire": "雇佣 (-{{cost}}g)",
+    "ui.close": "关闭",
+    "task.weeds": "清理杂草",
+    "task.stone": "清理石头",
+    "task.wood": "砍伐木材",
+    "task.watering": "浇灌作物"
+}
