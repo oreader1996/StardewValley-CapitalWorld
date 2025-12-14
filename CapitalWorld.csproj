@@ -4,35 +4,18 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<!-- 默认禁用部署，防止在 CI 环境下报错 -->
+		<EnableModDeploy>false</EnableModDeploy>
+		<EnableGameDebugging>false</EnableGameDebugging>
 	</PropertyGroup>
 
-	<!-- ⬇️⬇️⬇️ 核心修改 ⬇️⬇️⬇️ -->
-
-	<Choose>
-		<!-- 场景 1: 本地开发 (你的电脑) -->
-		<!-- 如果 D 盘那个文件夹存在，就用它。 -->
-		<When Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">
-			<PropertyGroup>
-				<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
-				<EnableModDeploy>true</EnableModDeploy>
-				<EnableGameDebugging>true</EnableGameDebugging>
-			</PropertyGroup>
-		</When>
-
-		<!-- 场景 2: GitHub Actions (或其他环境) -->
-		<!-- 既然找不到真正的游戏，我们就给它一个"." (代表当前目录)。-->
-		<!-- 当前目录肯定存在，所以不会报错说“找不到路径”。-->
-		<!-- 之后构建工具发现当前目录下没有游戏文件，就会自动切换到使用包内自带的 DLL。 -->
-		<Otherwise>
-			<PropertyGroup>
-				<GamePath>.</GamePath>
-				<EnableModDeploy>false</EnableModDeploy>
-				<EnableGameDebugging>false</EnableGameDebugging>
-			</PropertyGroup>
-		</Otherwise>
-	</Choose>
-
-	<!-- ⬆️⬆️⬆️ 修改结束 ⬆️⬆️⬆️ -->
+	<!-- ⬇️ 只有当你电脑上真的有这个文件时，才启用本地路径 -->
+	<!-- 注意：这里只负责你本地开发，GitHub 上会自动跳过这一段 -->
+	<PropertyGroup Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley\Stardew Valley.exe')">
+		<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
+		<EnableModDeploy>true</EnableModDeploy>
+		<EnableGameDebugging>true</EnableGameDebugging>
+	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />

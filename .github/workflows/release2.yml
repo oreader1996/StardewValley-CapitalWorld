@@ -8,7 +8,9 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # ✅ 关键修改：使用 Linux 环境构建
+    # Linux 环境下，构建工具不会强制检查 Windows 游戏路径，会直接使用内置 DLL
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -22,21 +24,23 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ✅ 这里的命令非常干净，不需要任何额外参数
       - name: Build project
         run: dotnet build --configuration Release
 
+      # Linux 下即使是 PowerShell Core 也可以运行，但用 bash 更原生
       - name: Prepare release folder
-        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release
-          Copy-Item -Path "bin\Release\net6.0\CapitalWorld.dll" -Destination "release\" -Force
-          Copy-Item -Path "manifest.json" -Destination "release\" -Force
+          mkdir -p release
+          cp bin/Release/net6.0/CapitalWorld.dll release/
+          cp manifest.json release/
 
+      # 打包 zip
       - name: Create release zip
-        shell: pwsh
-        run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
+        run: |
+          cd release
+          zip -r ../CapitalWorld.zip ./*
 
+      # 上传结果
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
