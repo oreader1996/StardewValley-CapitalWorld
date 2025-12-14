@@ -4,19 +4,31 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-
-		<!-- ✅ 核心修改：默认设置（适用于 GitHub Actions） -->
-		<!-- 先默认禁用部署和调试，也不设置 GamePath。这样构建工具就不会去寻找游戏。 -->
-		<EnableModDeploy>false</EnableModDeploy>
-		<EnableGameDebugging>false</EnableGameDebugging>
 	</PropertyGroup>
 
-	<!-- ✅ 本地开发覆盖：只有当你电脑上的路径真的存在时，才开启部署 -->
-	<PropertyGroup Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">
-		<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
-		<EnableModDeploy>true</EnableModDeploy>
-		<EnableGameDebugging>true</EnableGameDebugging>
-	</PropertyGroup>
+	<!-- ⬇️⬇️⬇️ 使用 Choose/When 逻辑，确保绝对不会出错 ⬇️⬇️⬇️ -->
+	<Choose>
+		<!-- 情况 1: 在 GitHub Actions 服务器上 -->
+		<When Condition="'$(GITHUB_ACTIONS)' == 'true'">
+			<PropertyGroup>
+				<!-- 强制清空游戏路径，强制禁用部署 -->
+				<GamePath></GamePath>
+				<EnableModDeploy>false</EnableModDeploy>
+				<EnableGameDebugging>false</EnableGameDebugging>
+			</PropertyGroup>
+		</When>
+
+		<!-- 情况 2: 在你的本地电脑上 (默认情况) -->
+		<Otherwise>
+			<PropertyGroup>
+				<!-- 这里写你本地的路径 -->
+				<GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
+				<EnableModDeploy>true</EnableModDeploy>
+				<EnableGameDebugging>true</EnableGameDebugging>
+			</PropertyGroup>
+		</Otherwise>
+	</Choose>
+	<!-- ⬆️⬆️⬆️ 修改结束 ⬆️⬆️⬆️ -->
 
 	<ItemGroup>
 		<PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />

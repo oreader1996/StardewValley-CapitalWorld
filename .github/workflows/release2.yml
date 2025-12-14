@@ -22,9 +22,9 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # 这里的 /p:EnableModDeploy=false 是双重保险
+      # ⬇️ 显式传递 GITHUB_ACTIONS 属性，配合 .csproj 的逻辑
       - name: Build project
-        run: dotnet build --configuration Release /p:EnableModDeploy=false
+        run: dotnet build --configuration Release /p:GITHUB_ACTIONS=true
 
       - name: Prepare release folder
         shell: pwsh
@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
-      # ✅ 必须是 v4 版本，否则会报错
+      # 确保是 v4
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
