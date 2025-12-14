@@ -1,44 +1,53 @@
-﻿name: Build CapitalWorld Mod
+﻿name: Build and Release CapitalWorld Mod
 
 on:
   push:
-    branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+    tags:
+      - 'v*.*.*'   # 当打版本 tag 触发，例如 v1.0.0
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
+      # 1️⃣ 获取代码
       - name: Checkout repository
-        uses: actions/checkout@v4  # 升级到 v4
+        uses: actions/checkout@v3
 
+      # 2️⃣ 安装 .NET 6 SDK
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4 # 升级到 v4
+        uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '6.0.x'
 
+      # 3️⃣ 还原 NuGet 包
       - name: Restore dependencies
         run: dotnet restore
 
+      # 4️⃣ 构建项目 (显式禁用 Mod 部署，防止寻找游戏路径报错)
       - name: Build project
-        run: dotnet build --configuration Release /p:CI=true
+        run: dotnet build --configuration Release /p:EnableModDeploy=false /p:EnableGameDebugging=false
 
+      # 5️⃣ 收集输出文件 (使用 PowerShell 语法，更稳定)
       - name: Prepare release folder
-        shell: pwsh
         run: |
+          # 创建 release 文件夹，如果存在则覆盖
           New-Item -ItemType Directory -Force -Path release
+          
+          # 复制 DLL 和 manifest.json
           Copy-Item -Path "bin\Release\net6.0\CapitalWorld.dll" -Destination "release\" -Force
           Copy-Item -Path "manifest.json" -Destination "release\" -Force
 
+      # 6️⃣ 打包成 ZIP
       - name: Create release zip
-        shell: pwsh
         run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
-      # ⬇️ 关键修复：升级到 v4 版本 ⬇️
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      # 7️⃣ 上传到 GitHub Release
+      - name: Upload release
+        uses: softprops/action-gh-release@v1
         with:
-          name: CapitalWorld-Mod
-          path: CapitalWorld.zip
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref }}
+          files: CapitalWorld.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
