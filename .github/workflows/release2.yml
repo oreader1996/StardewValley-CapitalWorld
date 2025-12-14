@@ -1,0 +1,46 @@
+﻿name: Build CapitalWorld Mod
+
+on:
+  push:
+    branches: [ "master", "main" ] # 👈 修改点：只要推送到 master 或 main 分支就触发
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # 显式传入参数，告诉 .csproj 我们现在是在 GitHub 上 (CI=true)
+      - name: Build project
+        run: dotnet build --configuration Release /p:CI=true
+
+      - name: Prepare release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          # 尝试复制文件，如果找不到会报错，方便我们排查
+          Copy-Item -Path "bin\Release\net6.0\CapitalWorld.dll" -Destination "release\" -Force
+          Copy-Item -Path "manifest.json" -Destination "release\" -Force
+
+      - name: Create release zip
+        shell: pwsh
+        run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
+
+      # 上传构件 (Artifact)，这样你在 Actions 页面就能直接下载 zip 测试，不用发布 Release
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: CapitalWorld-Mod
+          path: CapitalWorld.zip

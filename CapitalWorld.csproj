@@ -4,13 +4,25 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+	</PropertyGroup>
 
-		<!-- ⬇️ 修正点：删除了 Exists 单引号前的反斜杠 -->
-		<GamePath Condition="Exists('D:\SteamLibrary\steamapps\common\Stardew Valley')">D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath>
+	<PropertyGroup>
+		<MyLocalGamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</MyLocalGamePath>
+	</PropertyGroup>
 
-		<!-- ⬇️ 保持不变 -->
-		<EnableModDeploy Condition="'$(GamePath)' == ''">false</EnableModDeploy>
-		<EnableGameDebugging Condition="'$(GamePath)' == ''">false</EnableGameDebugging>
+	<!-- 场景 A：如果本地路径存在（你的电脑） -->
+	<PropertyGroup Condition="Exists('$(MyLocalGamePath)')">
+		<GamePath>$(MyLocalGamePath)</GamePath>
+		<EnableModDeploy>true</EnableModDeploy>
+		<EnableGameDebugging>true</EnableGameDebugging>
+	</PropertyGroup>
+
+	<!-- 场景 B：如果本地路径不存在（GitHub 服务器） -->
+	<PropertyGroup Condition="!Exists('$(MyLocalGamePath)')">
+		<!-- 这里的关键是：绝对不要设置 GamePath，让它保持为空 -->
+		<!-- 只要 GamePath 为空，Pathoschild 包就会使用内部 DLL 进行编译 -->
+		<EnableModDeploy>false</EnableModDeploy>
+		<EnableGameDebugging>false</EnableGameDebugging>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -18,7 +30,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include=".github\workflows\release.yml" />
+		<None Include=".github\workflows\release.yml.back" />
+		<None Include=".github\workflows\release2.yml" />
 	</ItemGroup>
 
 </Project>
