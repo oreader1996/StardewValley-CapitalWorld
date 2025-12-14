@@ -22,9 +22,8 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ⬇️ 关键：传递 /p:CI=true，这会激活 .csproj 里的 "屏蔽脚本" 逻辑
       - name: Build project
-        run: dotnet build --configuration Release /p:CI=true
+        run: dotnet build --configuration Release
 
       # 手动打包文件 (因为屏蔽了构建脚本，包自带的复制功能失效，必须在这里手动复制)
       - name: Prepare release folder

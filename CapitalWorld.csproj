@@ -4,11 +4,27 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath>
+    
+    <!-- ⚠️注意：移除或注释掉硬编码的本地 GamePath，或者只在本地调试时生效 -->
+    <!-- <GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley\</GamePath> -->
+  </PropertyGroup>
+
+  <!-- 配置 ModBuildConfig -->
+  <PropertyGroup>
+    <!-- 在 Release 模式(CI构建)下，禁止复制文件到游戏目录，禁止启动游戏 -->
+    <EnableModDeploy Condition="'$(Configuration)' == 'Release'">false</EnableModDeploy>
+    <EnableGameDebugging Condition="'$(Configuration)' == 'Release'">false</EnableGameDebugging>
+    <!-- 禁止 ModBuildConfig 自动打包 zip (因为你在 YAML 里手动打包了) -->
+    <EnableModZip Condition="'$(Configuration)' == 'Release'">false</EnableModZip>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- ModBuildConfig: 用于本地开发的自动化工具 -->
     <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
+    
+    <!-- ✅ 新增: StardewModdingAPI -->
+    <!-- 这个包提供了游戏核心 DLL 的引用，这样在 CI 服务器上就不需要安装游戏也能编译了 -->
+    <PackageReference Include="StardewModdingAPI" Version="4.0.0" />
   </ItemGroup>
 
   <ItemGroup>
