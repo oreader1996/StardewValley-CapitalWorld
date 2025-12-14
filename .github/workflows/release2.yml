@@ -22,7 +22,7 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ✅ 构建命令简化，不再需要传递复杂的参数，全靠 .csproj 自动判断
+      # ✅ 这里的命令非常干净，不需要任何额外参数
       - name: Build project
         run: dotnet build --configuration Release
 
@@ -37,7 +37,6 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path release\* -DestinationPath CapitalWorld.zip -Force
 
-      # ✅ 必须是 v4 版本
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
