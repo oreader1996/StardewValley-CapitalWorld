@@ -24,9 +24,10 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # 4️⃣ 构建项目，忽略本地游戏路径
+      # 4️⃣ 构建项目 (显式禁用 Mod 部署)
+      # 注意：这里的 run 必须和上面的 name 保持对齐（通常是前面有8个空格）
       - name: Build project
-        run: run: dotnet build --configuration Release /p:EnableModDeploy=false
+        run: dotnet build --configuration Release /p:EnableModDeploy=false /p:EnableGameDebugging=false
 
       # 5️⃣ 收集输出文件
       - name: Prepare release folder
